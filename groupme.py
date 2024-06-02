@@ -22,9 +22,52 @@ TOKEN_POSTFIX = '?token='
 
 class Chat:
     """
-    @brief Represents a GroupMe chat
+    @brief Interface representing a GroupMe chat
     """
-    pass
+    def __init__(self):
+        """
+        @brief Constructor. Defaults all fields to None, since generic Chat objects are not created
+        """
+        self.name = None
+        self.description = None
+        self.last_used = None
+
+    def last_used_time(self) -> str:
+        """
+        @brief Returns the last time the chat was used, formatted as a string
+        @return (str) The timestamp formatted MM/dd/yyyy hh:mm:ss
+        """
+        obj = time.localtime(self.last_used)
+        return f'{obj.tm_mon}/{obj.tm_mday}/{obj.tm_year} {to_twelve_hour_time(obj.tm_hour, obj.tm_min, obj.tm_sec)}'
+
+
+class Group(Chat):
+    """
+    @brief Represents a GroupMe group
+    """
+    def __init__(self, data: Dict):
+        """
+        @brief Constructor
+        @param data (Dict): Dictionary of data representing the group as returned from a query
+        """
+        super().__init__()
+        self.name = data['name']
+        self.description = data['description']
+        self.last_used = data['messages']['last_message_created_at']
+
+
+class DirectMessage(Chat):
+    """
+    @brief Represents a GroupMe direct message thread
+    """
+    def __init__(self, data: Dict):
+        """
+        @brief Constructor
+        @param data (Dict): Dictionary of data representing the direct message chat as returned from a query
+        """
+        super().__init__()
+        self.name = data['other_user']['name']
+        self.last_used = data['last_message']['created_at']
 
 
 class GroupMe:
@@ -60,6 +103,7 @@ class GroupMe:
         """
         groups = []
         direct_messages = []
+        chats = []
 
         # Determine cutoff (if applicable)
         cutoff = get_cutoff(last_used)
@@ -90,7 +134,7 @@ class GroupMe:
                     print(f'\rFetching groups ({(params["page"] - 1) * params["per_page"] + i + 1} retrieved)...', end='')
 
                 # Add to list of groups
-                groups.append(group)
+                groups.append(Group(group))
 
             # Get next page
             params['page'] = params['page'] + 1
@@ -98,7 +142,63 @@ class GroupMe:
 
         if verbose:
             print()
-        return groups
+
+        # Get direct messages
+        url = f'{BASE_URL}/chats{TOKEN_POSTFIX}{self.token}'
+        params = {
+            'page': 1,
+            'per_page': 10
+        }
+
+        # Loop through all direct message pages
+        dm_page = call_api(url, params=params, except_message='Unexpected error fetching direct messages')
+        in_range = True
+        num_chats = 0
+        while len(dm_page) > 0 and in_range:
+            # Loop over page
+            for i, dm in enumerate(dm_page):
+                # Check last sent message
+                if cutoff:
+                    last_sent_message = dm['last_message']['created_at']
+                    if last_sent_message < cutoff:
+                        in_range = False
+                        break
+
+                # Output progress if requested
+                if verbose:
+                    num_chats = num_chats + 1
+                    print(f'\rFetching direct messages ({num_chats} retrieved)...', end='')
+
+                # Add to list of groups
+                direct_messages.append(DirectMessage(dm))
+
+            # Get next page
+            params['page'] = params['page'] + 1
+            dm_page = call_api(url, params=params, except_message='Unexpected error fetching direct messages')
+
+        if verbose:
+            print()
+
+        # Merge lists
+        group_index = 0
+        dm_index = 0
+        while group_index < len(groups) and dm_index < len(direct_messages):
+            if groups[group_index].last_used > direct_messages[dm_index].last_used:
+                chats.append(groups[group_index])
+                group_index = group_index + 1
+            else:
+                chats.append(direct_messages[dm_index])
+                dm_index = dm_index + 1
+        if group_index == len(groups):
+            while dm_index < len(direct_messages):
+                chats.append(direct_messages[dm_index])
+                dm_index = dm_index + 1
+        else:
+            while group_index < len(groups):
+                chats.append(groups[group_index])
+                group_index = group_index + 1
+
+        return chats
 
 
 class GroupMeException(Exception):
@@ -193,3 +293,25 @@ def to_seconds(number: int, units: str) -> int:
         return int(time.time() - cutoff_date.timestamp())
     else:
         raise GroupMeException('Invalid units specified for last_used duration')
+
+
+def to_twelve_hour_time(hour: int, minute: int, second: int) -> str:
+    """
+    @brief Converts 24 hour time to 12 hour time
+    @param hour    (int): The hour in 24-hour time
+    @param minute  (int): The minute
+    @param second  (int): The second
+    @return (str) The time in 12-hour time formatted as hh:mm:ss a
+    """
+    # Normalize hour
+    if hour > 23:
+        hour = hour % 24
+
+    if hour == 0:
+        return f'12:{str(minute).zfill(2)}:{str(second).zfill(2)} AM'
+    elif hour < 12:
+        return f'{hour}:{str(minute).zfill(2)}:{str(second).zfill(2)} AM'
+    elif hour == 12:
+        return f'12:{str(minute).zfill(2)}:{str(second).zfill(2)} PM'
+    else:
+        return f'{hour - 12}:{str(minute).zfill(2)}:{str(second).zfill(2)} PM'
