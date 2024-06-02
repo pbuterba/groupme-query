@@ -11,7 +11,8 @@
 from argparse import ArgumentParser
 import sys
 
-from groupme import GroupMe, GroupMeException
+sys.path.append('groupme_api')
+from groupme import GroupMe, GroupMeException  # noqa
 
 
 def main(token: str) -> int:
