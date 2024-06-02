@@ -12,7 +12,8 @@
 import time
 from typing import Dict
 
-from time_functions import to_twelve_hour_time
+# noinspection PyUnresolvedReferences
+from groupme.time_functions import to_twelve_hour_time
 
 
 class Chat:

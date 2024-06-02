@@ -11,8 +11,7 @@
 from argparse import ArgumentParser
 import sys
 
-sys.path.append('groupme_api')
-from groupme import GroupMe, GroupMeException  # noqa
+from groupme import GroupMe, GroupMeException
 
 
 def main(token: str) -> int:
@@ -32,6 +31,9 @@ def main(token: str) -> int:
 
     # Print user's name
     print(f'Successfully logged in {user.name}')
+    chats = user.get_chats()
+    for i, chat in enumerate(chats):
+        print(f'{i + 1}. {chat.name} - Last used: {chat.last_used_time()}')
 
     return 0
 

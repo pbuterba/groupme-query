@@ -15,9 +15,12 @@ import requests
 from typing import List, Dict
 import time
 
-from chat import Chat, Group, DirectMessage
-from common_utils import BASE_URL, TOKEN_POSTFIX, GroupMeException
-from time_functions import to_seconds
+# noinspection PyUnresolvedReferences
+from groupme.chat import Chat, Group, DirectMessage
+# noinspection PyUnresolvedReferences
+from groupme.common_utils import BASE_URL, TOKEN_POSTFIX, GroupMeException
+# noinspection PyUnresolvedReferences
+from groupme.time_functions import to_seconds
 
 
 class GroupMe:
