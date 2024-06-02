@@ -1,0 +1,3 @@
+[submodule "groupme"]
+	path = groupme
+	url = git@github.com:pbuterba/groupme.git
