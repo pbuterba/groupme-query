@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 6/1/2024
+@updated 7/28/2024
 
 @author  Preston Buterbaugh
 """
@@ -31,9 +31,9 @@ def main(token: str) -> int:
 
     # Print user's name
     print(f'Successfully logged in {user.name}')
-    chats = user.get_chats()
-    for i, chat in enumerate(chats):
-        print(f'{i + 1}. {chat.name} - Last used: {chat.last_used_time()}')
+    messages = user.get_messages(sent_before='7/1/2024', sent_after='7/1/2024', verbose=True)
+    for message in messages:
+        print(f'{message.author} to {message.chat} at {message.time}: {message.text}')
 
     return 0
 
