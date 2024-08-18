@@ -1,3 +1,6 @@
 [submodule "groupme"]
 	path = groupme
 	url = git@github.com:pbuterba/groupme.git
+[submodule "htmlwriter"]
+	path = htmlwriter
+	url = git@github.com:pbuterba/htmlwriter.git
