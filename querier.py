@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 7/28/2024
+@updated 8/27/2024
 
 @author  Preston Buterbaugh
 """
@@ -41,5 +41,11 @@ def main(token: str) -> int:
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument(dest='token', help='GroupMe API access token')
+    parser.add_argument(dest='group', default=None, help='The name of a group to search')
+    parser.add_argument(dest='start', default=None, help='The start of the message date range')
+    parser.add_argument(dest='end', default=None, help='The end of the message date range')
+    parser.add_argument(dest='keyword', default=None, help='A keyword to search for')
+    parser.add_argument(dest='before', default=0, help='The number of messages before each matching message to retrieve')
+    parser.add_argument(dest='after', default=0, help='The number of messages after each matching message to retrieve')
     args = parser.parse_args()
     sys.exit(main(args.token))
