@@ -12,6 +12,10 @@ from argparse import ArgumentParser
 import sys
 
 from groupme import GroupMe, GroupMeException
+from htmlwriter import Document, Node
+
+# List of month names
+MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 
 def main(token: str, chat_name: str | None, start: str | None, end: str | None, keyword: str | None, before: int, after: int) -> int:
@@ -51,10 +55,102 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
         messages = chat.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, verbose=True)
     else:
         messages = user.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, verbose=True)
+
+    # Check that there is at least one message
+    if len(messages) == 0:
+        print('No messages found')
+        return 0
+
+    # Create cover page
+    cover_page = Document('GroupMe Query Results', css=['style.css'])
+
+    # Create cover header
+    header = Node('div', attributes={'class': 'header'})
+    cover_title = Node('h1')
+    cover_title_text = f'{user.name}\'s GroupMe messages'
+    if start and end:
+        cover_title_text = f'{cover_title_text} between {start} and {end}'
+    elif start:
+        cover_title_text = f'{cover_title_text} since {start}'
+    elif end:
+        cover_title_text = f'{cover_title_text} before {end}'
+
+    if keyword:
+        cover_title_text = f'{cover_title_text} containing "{keyword}"'
+
+    cover_title.text_content = cover_title_text
+    header.append_child(cover_title)
+    cover_page.append_child(header)
+
+    # Create body
+    cover_container = Node('div', attributes={'class': 'container'})
+    year_list = Node('ul', attributes={'class': 'year-list'})
+
+    # Create starting variables for message time tracking
+    curr_year = int(messages[0].time.split(' ')[0].split('/')[2])
+    year_list.append_child(Node('li', content=str(curr_year)))
+
+    curr_month = int(messages[0].time.split(' ')[0].split('/')[0])
+    month_list = Node('ul', attributes={'class': 'month-list'})
+    month_list.append_child(Node('li', content=MONTH_NAMES[curr_month - 1]))
+
+    curr_day = int(messages[0].time.split(' ')[0].split('/')[1])
+    curr_month_segment = calculate_month_segment(curr_day)
+    month_segment_list = Node('ul', attributes={'class': 'start-date-list'})
+    month_segment = Node('li', content=f'{MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}')
+    month_segment_link = Node('a')
+    month_segment_link.href(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{curr_day}.html')
+    month_segment_link.append_child(month_segment)
+    month_segment_list.append_child(month_segment_link)
+
+    for message in messages:
+        # Check if new day
+        pass
+
+        # Check if new month segment
+        pass
+
+        # Check if new month
+        pass
+
+        # Check if new year
+        if int(message.time.split(' ')[0].split('/')[2]) != curr_year:
+            year_list.append_child(month_list)
+            curr_year = int(message.time.split(' ')[0].split('/')[2])
+            month_list = Node('ul', attributes={'class': 'month-list'})
+
     for message in messages:
         print(f'{message.author} to {message.chat} at {message.time}: {message.text}')
 
     return 0
+
+
+def calculate_month_segment(day: int) -> int:
+    """
+    @brief  Gets the month segment that a day falls in
+    @param  day (int): The day of the month
+    @return (int) 1 if day is 1-10, 2 if day is 11-20, or 3 otherwise
+    """
+    if day < 11:
+        return 1
+    if day < 21:
+        return 2
+    return 3
+
+
+def day_suffix(day: int) -> str:
+    """
+    @brief  Gets the two letter suffix to apply to a day of a month (st, nd, rd, th)
+    @param  day (int): The day of the month
+    @return (str) The appropriate suffix for the given day of the month
+    """
+    if str(day).endswith('1') and not str(day).endswith('11'):
+        return 'st'
+    if str(day).endswith('2') and not str(day).endswith('12'):
+        return 'nd'
+    if str(day).endswith('3') and not str(day).endswith('13'):
+        return 'rd'
+    return 'th'
 
 
 if __name__ == '__main__':
