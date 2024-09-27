@@ -119,15 +119,26 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
         pass
 
         # Check if new month segment
-        pass
+        if calculate_month_segment(int(message.time.split(' ')[0].split('/')[1])) != curr_month_segment:
+            curr_month_segment = calculate_month_segment(int(message.time.split(' ')[0].split('/')[1]))
+            month_segment = Node('li', content=f'{MONTH_NAMES[message.time.split(' ')[0].split('/')[0] - 1]} {curr_day}{day_suffix(curr_day)}')
+            month_segment_link = Node('a')
+            month_segment_link.href(f'{message.time.split(' ')[0].split('/')[2]}/{str(message.time.split(' ')[0].split('/')[0]).zfill(2)}-{MONTH_NAMES[message.time.split(' ')[0].split('/')[0] - 1]}/{message.time.split(' ')[0].split('/')[0]}-{curr_day}.html')
+            month_segment_link.append_child(month_segment)
+            month_segment_list.append_child(month_segment_link)
 
         # Check if new month
-        pass
+        if int(message.time.split(' ')[0].split('/')[0]) != curr_month:
+            month_list.append_child(month_segment_list)
+            curr_month = int(message.time.split(' ')[0].split('/')[0])
+            month_list.append_child(Node('li', content=MONTH_NAMES[curr_month - 1]))
+            month_segment_list = Node('ul', attributes={'class': 'start-date-list'})
 
         # Check if new year
         if int(message.time.split(' ')[0].split('/')[2]) != curr_year:
             year_list.append_child(month_list)
             curr_year = int(message.time.split(' ')[0].split('/')[2])
+            year_list.append_child(Node('li', content=str(curr_year)))
             month_list = Node('ul', attributes={'class': 'month-list'})
 
     for message in messages:
