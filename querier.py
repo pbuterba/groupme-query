@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 12/19/2024
+@updated 12/20/2024
 
 @author  Preston Buterbaugh
 """
@@ -82,7 +82,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
 
     # Create cover stylesheet
     style_file = open('style.css', 'w')
-    style_file.writelines([f'{line}\n' for line in cover_style])
+    style_file.writelines(cover_style)
     style_file.close()
 
     # Create cover page
@@ -127,7 +127,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     # Create month directory and stylesheet
     os.mkdir(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}')
     style_file = open(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/style.css', 'w')
-    style_file.writelines([f'{line}\n' for line in page_style])
+    style_file.writelines(page_style)
     style_file.close()
 
     # Create variables for tracking day
@@ -160,7 +160,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     
     for message in messages:
         # Check if new chat or new day
-        if message.chat != curr_chat or message.time.split(' ')[0].split('/')[1] != curr_day:
+        if message.chat != curr_chat or int(message.time.split(' ')[0].split('/')[1]) != curr_day:
             # End current chat
             chat_div.append_child(message_container)
             container = day_page.get_by_class_name('container')[0]
@@ -215,7 +215,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                         # Create new month directory and stylesheet
                         os.mkdir(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}')
                         style_file = open(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/style.css', 'w')
-                        style_file.writelines([f'{line}\n' for line in page_style])
+                        style_file.writelines(page_style)
                         style_file.close()
 
                         # Create new month segment list
@@ -241,6 +241,9 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                 # Create new day
                 day_page = new_day_page(message.time.split(' ')[0], user.name)
 
+            # Update current chat
+            curr_chat = message.chat
+
             # Create new chat
             chat_div = Node('div', attributes={'class': 'chat'})
             chat_header = create_chat_header(user, message)
@@ -248,7 +251,32 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
             message_container = Node('div', attributes={'class': 'messages'})
 
         # Process message
-        pass
+        message_node = Node('div', attributes={'class': 'message'})
+        metadata = Node('div', attributes={'class': 'message-metadata'})
+
+        # Create author info
+        author_info = Node('div', attributes={'class': 'author-info'})
+        if message.author_profile_picture_url:
+            author_profile = Node('img', attributes={'src': message.author_profile_picture_url})
+        else:
+            author_profile = Node('div', attributes={'class': 'no-pic'}, content='No profile picture')
+        author_name = Node('h3', content=message.author)
+        author_info.append_child(author_profile)
+        author_info.append_child(author_name)
+        metadata.append_child(author_info)
+
+        # Create timestamp
+        timestamp = Node('div', attributes={'class': 'timestamp'}, content=''.join(message.time.split(' ')[1:]))
+        metadata.append_child(timestamp)
+
+        message_node.append_child(metadata)
+
+        # Process message text
+        if message.text is not None:
+            message_text = filter_text(message.text)
+            message_node.append_child(Node('p', content=message_text))
+
+        message_container.append_child(message_node)
 
     print('\rMessage processing complete')
 
@@ -283,9 +311,6 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     cover_page.append_child(cover_container)
 
     cover_page.export('cover.html')
-
-    for message in messages:
-        print(f'{message.author} to {message.chat} at {message.time}: {message.text}')
 
     return 0
 
@@ -332,7 +357,12 @@ def create_chat_header(user: GroupMe, message_data: Message) -> Node:
             chat_data = user.get_chat(message_data.chat, is_dm=True)
         chat_avatar = chat_data.image_url
         group_avatars[message_data.chat] = chat_avatar
-    chat_img = Node('img', attributes={'src': chat_avatar})
+
+    if chat_avatar:
+        chat_img = Node('img', attributes={'src': chat_avatar})
+    else:
+        chat_img = Node('div', attributes={'class': 'no-pic'}, content='No picture')
+
     if not message_data.is_group:
         chat_img.add_class('dm-img')
     chat_header.append_child(chat_img)
@@ -421,6 +451,27 @@ def day_suffix(day: int) -> str:
     if str(day).endswith('3') and not str(day).endswith('13'):
         return 'rd'
     return 'th'
+
+
+def filter_text(text: str) -> str:
+    """
+    @brief  Replaces unicode encodings in the form of \\uXXXX with appropriate HTML characters
+    @param  text (str): The text as received from the GroupMe API
+    @return (str) The text prepared for presentation in HTML
+    """
+    replacements = {
+        '\u2014': '-',
+        '\u2019': '&rsquo;',
+        '\u201c': '&ldquo;',
+        '\u201d': '&rdquo;',
+        '\u2026': '...'
+    }
+    for unicode_char in replacements.keys():
+        text = text.replace(f'{unicode_char}', replacements[unicode_char])
+    # for i in range(len(text) - 1):
+    #     if text[i:i + 2] == '\\u':
+    #         print(f'Uncaught unicode character: {text[i + 2:i + 6]}')
+    return text
 
 
 if __name__ == '__main__':

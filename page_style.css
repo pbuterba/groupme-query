@@ -51,6 +51,12 @@ body {
 	width: 3vw;
 }
 
+.chat-header .no-pic {
+    font-size: 1rem;
+    width: 3vw;
+    height: 3vw;
+}
+
 .dm-img {
 	border-radius: 100px;
 	height: 3vw;
@@ -76,15 +82,26 @@ h2 {
 	justify-content: space-between;
 }
 
+.no-pic {
+    display: flex;
+    align-items: center;
+    text-align: center;
+}
+
 .author-info {
 	display: flex;
+    align-items: center;
+}
+
+.author-info img, .author-info .no-pic {
+	width: 3vw;
+	height: 3vw;
+	border-radius: 100px;
+    font-size: 0.85rem;
 }
 
 .author-info img {
-	width: 3vw;
-	height: 3vw;
 	object-fit: cover;
-	border-radius: 100px;
 }
 
 h3 {
