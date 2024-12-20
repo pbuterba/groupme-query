@@ -3,35 +3,40 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 9/5/2024
+@updated 12/19/2024
 
 @author  Preston Buterbaugh
 """
 # Imports
 from argparse import ArgumentParser
+import os
 import sys
 from typing import List
 
-from groupme import GroupMe, GroupMeException
+from groupme import GroupMe, Message, GroupMeException
 from htmlwriter import Document, Node
 
 # List of month names
 MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
+# Create dictionary to cache group avatars
+group_avatars = {}
 
-def main(token: str, chat_name: str | None, start: str | None, end: str | None, keyword: str | None, before: int, after: int) -> int:
+
+def main(token: str, chat_name: str | None, start: str | None, end: str | None, keyword: str | None, before: int, after: int, output_directory: str | None) -> int:
     """
     @brief  Main entrypoint of the function
-    @param  token        (str): The users access token for the GroupMe API
-    @param  chat_name    (str): The name of the group or direct message to search. If none, all groups are searched
-    @param  start        (str): A date specified as a string, which determines the start of the time window to search
-                                if None, all messages back to the beginning of the user's history are searched
-    @param  end          (str): A date specified as a string, which determines the end of the time window to search
-                                If None, all messages up to the present date are searched
-    @param  keyword      (str): A string to search for, such that only messages with this string of text are returned
-                                If None, all messages within the time window are returned
-    @param  before       (int): The number of messages to fetch immediately proceeding each message matching search criteria
-    @param  after        (int): The number of messages to fetch immediately after each message matching search criteria
+    @param  token            (str): The users access token for the GroupMe API
+    @param  chat_name        (str): The name of the group or direct message to search. If none, all groups are searched
+    @param  start            (str): A date specified as a string, which determines the start of the time window to search
+                                    if None, all messages back to the beginning of the user's history are searched
+    @param  end              (str): A date specified as a string, which determines the end of the time window to search
+                                    If None, all messages up to the present date are searched
+    @param  keyword          (str): A string to search for, such that only messages with this string of text are returned
+                                    If None, all messages within the time window are returned
+    @param  before           (int): The number of messages to fetch immediately proceeding each message matching search criteria
+    @param  after            (int): The number of messages to fetch immediately after each message matching search criteria
+    @param  output_directory (str): The directory to which to write output files. If None, the current directory is used
     @return (int)
         - 0 if completed with no errors
         - 1 otherwise
@@ -62,6 +67,24 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
         print('No messages found')
         return 0
 
+    # Read stylesheets
+    style_file = open('cover_style.css')
+    cover_style = style_file.readlines()
+    style_file.close()
+
+    style_file = open('page_style.css')
+    page_style = style_file.readlines()
+    style_file.close()
+
+    # Change directory
+    if output_directory is not None:
+        os.chdir(output_directory)
+
+    # Create cover stylesheet
+    style_file = open('style.css', 'w')
+    style_file.writelines([f'{line}\n' for line in cover_style])
+    style_file.close()
+
     # Create cover page
     cover_page = Document('GroupMe Query Results', css=['style.css'])
 
@@ -79,7 +102,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     if keyword:
         cover_title_text = f'{cover_title_text} containing "{keyword}"'
 
-    cover_title.text_content = cover_title_text
+    cover_title.text_content(cover_title_text)
     header.append_child(cover_title)
     cover_page.append_child(header)
 
@@ -89,6 +112,11 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
 
     # Create variables for tracking year
     curr_year = int(messages[0].time.split(' ')[0].split('/')[2])
+    try:
+        os.mkdir(str(curr_year))
+    except FileExistsError:
+        input(f'Output directory already contains a file or directory called {curr_year}. Delete existing folder and press ENTER to continue')
+        os.mkdir(str(curr_year))
     year_list.append_child(Node('li', content=str(curr_year)))
 
     # Create variables for tracking month
@@ -96,50 +124,165 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     month_list = Node('ul', attributes={'class': 'month-list'})
     month_list.append_child(Node('li', content=MONTH_NAMES[curr_month - 1]))
 
+    # Create month directory and stylesheet
+    os.mkdir(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}')
+    style_file = open(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/style.css', 'w')
+    style_file.writelines([f'{line}\n' for line in page_style])
+    style_file.close()
+
     # Create variables for tracking day
     curr_day = int(messages[0].time.split(' ')[0].split('/')[1])
+    print(f'\rProcessing {MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}, {curr_year}...', end='')
+    day_page = new_day_page(messages[0].time.split(' ')[0], user.name, start_date=messages[0].time.split(' ')[0])
+
+    # Create variables for tracking month segments
     curr_month_segment = calculate_month_segment(curr_day)
+    segment_pages = []
+
+    # Initialize month segment list on cover page
     month_segment_list = Node('ul', attributes={'class': 'start-date-list'})
     month_segment = Node('li', content=f'{MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}')
     month_segment_link = Node('a')
-    month_segment_link.href(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{curr_day}.html')
+    month_segment_link.href(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(curr_day).zfill(2)}.html')
     month_segment_link.append_child(month_segment)
     month_segment_list.append_child(month_segment_link)
-    day_page = new_day_page(messages[0].time.split(' ')[0], user.name, start_date=messages[0].time.split(' ')[0])
 
-    # Create variables for tracking group
-    curr_group = messages[0].group
+    # Create variables for tracking chat
+    curr_chat = messages[0].chat
     chat_div = Node('div', attributes={'class': 'chat'})
 
+    # Create chat header
+    chat_header = create_chat_header(user, messages[0])
+    chat_div.append_child(chat_header)
+
+    # Create message container
+    message_container = Node('div', attributes={'class': 'messages'})
+    
     for message in messages:
-        # Check if new group
+        # Check if new chat or new day
+        if message.chat != curr_chat or message.time.split(' ')[0].split('/')[1] != curr_day:
+            # End current chat
+            chat_div.append_child(message_container)
+            container = day_page.get_by_class_name('container')[0]
+            container.append_child(chat_div)
+
+            # Check if new day
+            if int(message.time.split(' ')[0].split('/')[1]) != curr_day:
+                # Add current day page to list
+                segment_pages.append((curr_day, day_page))
+
+                # Check if new month segment
+                if calculate_month_segment(int(message.time.split(' ')[0].split('/')[1])) != curr_month_segment:
+                    # Process current month segment day pages
+                    for day, page in segment_pages:
+                        header = page.get_by_class_name('header')[0]
+                        for nav_day, _ in segment_pages:
+                            tab = Node('div', attributes={'class': 'nav'}, content=f'{MONTH_NAMES[curr_month - 1]} {nav_day}{day_suffix(nav_day)}')
+                            if nav_day == day:
+                                tab.id('selected')
+                            tab_link = Node('a', attributes={'href': f'{curr_month}-{str(nav_day).zfill(2)}.html'})
+                            tab_link.append_child(tab)
+                            header.append_child(tab_link)
+                        page.export(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(day).zfill(2)}.html')
+
+                    # Check if new month
+                    if int(message.time.split(' ')[0].split('/')[0]) != curr_month:
+                        # End current month segment list
+                        month_list.append_child(month_segment_list)
+
+                        # Check if new year
+                        if int(message.time.split(' ')[0].split('/')[2]) != curr_year:
+                            # End current month list
+                            year_list.append_child(month_list)
+
+                            # Update current year
+                            curr_year = int(message.time.split(' ')[0].split('/')[2])
+
+                            # Create new year directory
+                            try:
+                                os.mkdir(str(curr_year))
+                            except FileExistsError:
+                                input(f'Output directory already contains a file or directory called {curr_year}. Delete existing folder and press ENTER to continue')
+                                os.mkdir(str(curr_year))
+
+                            # Create new month list
+                            year_list.append_child(Node('li', content=str(curr_year)))
+                            month_list = Node('ul', attributes={'class': 'month-list'})
+
+                        # Update current month
+                        curr_month = int(message.time.split(' ')[0].split('/')[0])
+
+                        # Create new month directory and stylesheet
+                        os.mkdir(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}')
+                        style_file = open(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/style.css', 'w')
+                        style_file.writelines([f'{line}\n' for line in page_style])
+                        style_file.close()
+
+                        # Create new month segment list
+                        month_list.append_child(Node('li', content=MONTH_NAMES[curr_month - 1]))
+                        month_segment_list = Node('ul', attributes={'class': 'start-date-list'})
+
+                    # Update current month segment
+                    curr_month_segment = calculate_month_segment(int(message.time.split(' ')[0].split('/')[1]))
+
+                    # Create new month segment
+                    curr_day = int(message.time.split(' ')[0].split('/')[1])
+                    month_segment = Node('li', content=f'{MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}')
+                    month_segment_link = Node('a')
+                    month_segment_link.href(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(curr_day).zfill(2)}.html')
+                    month_segment_link.append_child(month_segment)
+                    month_segment_list.append_child(month_segment_link)
+                    segment_pages = []
+
+                # Update current day
+                curr_day = int(message.time.split(' ')[0].split('/')[1])
+                print(f'\rProcessing {MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}, {curr_year}...', end='')
+
+                # Create new day
+                day_page = new_day_page(message.time.split(' ')[0], user.name)
+
+            # Create new chat
+            chat_div = Node('div', attributes={'class': 'chat'})
+            chat_header = create_chat_header(user, message)
+            chat_div.append_child(chat_header)
+            message_container = Node('div', attributes={'class': 'messages'})
+
+        # Process message
         pass
 
-        # Check if new day
-        pass
+    print('\rMessage processing complete')
 
-        # Check if new month segment
-        if calculate_month_segment(int(message.time.split(' ')[0].split('/')[1])) != curr_month_segment:
-            curr_month_segment = calculate_month_segment(int(message.time.split(' ')[0].split('/')[1]))
-            month_segment = Node('li', content=f'{MONTH_NAMES[message.time.split(' ')[0].split('/')[0] - 1]} {curr_day}{day_suffix(curr_day)}')
-            month_segment_link = Node('a')
-            month_segment_link.href(f'{message.time.split(' ')[0].split('/')[2]}/{str(message.time.split(' ')[0].split('/')[0]).zfill(2)}-{MONTH_NAMES[message.time.split(' ')[0].split('/')[0] - 1]}/{message.time.split(' ')[0].split('/')[0]}-{curr_day}.html')
-            month_segment_link.append_child(month_segment)
-            month_segment_list.append_child(month_segment_link)
+    # Finish appending and exporting all files
 
-        # Check if new month
-        if int(message.time.split(' ')[0].split('/')[0]) != curr_month:
-            month_list.append_child(month_segment_list)
-            curr_month = int(message.time.split(' ')[0].split('/')[0])
-            month_list.append_child(Node('li', content=MONTH_NAMES[curr_month - 1]))
-            month_segment_list = Node('ul', attributes={'class': 'start-date-list'})
+    # Add chat onto end of day
+    chat_div.append_child(message_container)
+    container = day_page.get_by_class_name('container')[0]
+    container.append_child(chat_div)
 
-        # Check if new year
-        if int(message.time.split(' ')[0].split('/')[2]) != curr_year:
-            year_list.append_child(month_list)
-            curr_year = int(message.time.split(' ')[0].split('/')[2])
-            year_list.append_child(Node('li', content=str(curr_year)))
-            month_list = Node('ul', attributes={'class': 'month-list'})
+    # Add day to segment pages list
+    segment_pages.append((curr_day, day_page))
+
+    # Process segment pages
+    for day, page in segment_pages:
+        header = page.get_by_class_name('header')[0]
+        for nav_day, _ in segment_pages:
+            tab = Node('div', attributes={'class': 'nav'},
+                       content=f'{MONTH_NAMES[curr_month - 1]} {nav_day}{day_suffix(nav_day)}')
+            if nav_day == day:
+                tab.id('selected')
+            tab_link = Node('a', attributes={'href': f'{curr_month}-{str(nav_day).zfill(2)}.html'})
+            tab_link.append_child(tab)
+            header.append_child(tab_link)
+        page.export(f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(day).zfill(2)}.html')
+
+    # Finish updating cover
+    month_list.append_child(month_segment_list)
+    year_list.append_child(month_list)
+
+    cover_container.append_child(year_list)
+    cover_page.append_child(cover_container)
+
+    cover_page.export('cover.html')
 
     for message in messages:
         print(f'{message.author} to {message.chat} at {message.time}: {message.text}')
@@ -165,18 +308,36 @@ def new_day_page(date: str, username: str, start_date: str = '') -> Document:
     header = Node('div', attributes={'class': 'header'})
     title = Node('h1', content=f'{username}\'s GroupMe messages between {start_date} and {month_segment_end(curr_month, curr_day, curr_year)}')
     header.append_child(title)
-    segment_days = get_segment_days(start_date)
-    for day in segment_days:
-        month = day.split('-')[0]
-        day_num = day.split('-')[1]
-        nav_div = Node('div', attributes={'class': 'nav'}, content=f'{MONTH_NAMES[month - 1]} {day_num}{day_suffix(day_num)}')
-        nav_link = Node('a', attributes={'href': f'{day}.html'})
-        nav_link.append_child(nav_div)
-        header.append_child(nav_link)
     page.append_child(header)
     container = Node('div', attributes={'class': 'container'})
     page.append_child(container)
     return page
+
+
+def create_chat_header(user: GroupMe, message_data: Message) -> Node:
+    """
+    @brief  Creates a new chat header node based on the data contained in a message sent to that chat
+    @param  user         (GroupMe) The GroupMe object representing the user whose messages are being processed
+    @param  message_data (str)     The message data being used to create the chat header
+    @return (Node) The div node representing the chat header
+    """
+    chat_header = Node('div', attributes={'class': 'chat-header'})
+    global group_avatars
+    if message_data.chat in group_avatars.keys():
+        chat_avatar = group_avatars[message_data.chat]
+    else:
+        if message_data.is_group:
+            chat_data = user.get_chat(message_data.chat)
+        else:
+            chat_data = user.get_chat(message_data.chat, is_dm=True)
+        chat_avatar = chat_data.image_url
+        group_avatars[message_data.chat] = chat_avatar
+    chat_img = Node('img', attributes={'src': chat_avatar})
+    if not message_data.is_group:
+        chat_img.add_class('dm-img')
+    chat_header.append_child(chat_img)
+    chat_header.append_child(Node('h2', content=message_data.chat))
+    return chat_header
 
 
 def calculate_month_segment(day: int) -> int:
@@ -271,5 +432,6 @@ if __name__ == '__main__':
     parser.add_argument('--keyword', dest='keyword', default='', help='A keyword to search for')
     parser.add_argument('--before', dest='before', default=0, help='The number of messages before each matching message to retrieve')
     parser.add_argument('--after', dest='after', default=0, help='The number of messages after each matching message to retrieve')
+    parser.add_argument('-o', dest='output_directory', default=None, help='The directory to which to write all output files from the query')
     args = parser.parse_args()
-    sys.exit(main(args.token, args.group, args.start, args.end, args.keyword, args.before, args.after))
+    sys.exit(main(args.token, args.group, args.start, args.end, args.keyword, args.before, args.after, args.output_directory))

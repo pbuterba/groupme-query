@@ -1,0 +1,108 @@
+body {
+    font-family: sans-serif;
+	margin: 0;
+	background: lightblue;
+}
+
+.header {
+	background: cyan;
+    text-align: center;
+	padding: 0.5vh 0 0 0;
+}
+
+.nav {
+	display: inline-block;
+	padding: 0.5rem;
+	border-width: 1px 1px 0 1px;
+	border-color: black;
+	border-style: solid;
+	min-width: 5vw;
+	text-decoration: none;
+	color: black;
+}
+
+#selected {
+	background: white;
+}
+
+.container {
+	background: white;
+	width: 90%;
+	margin: auto;
+	padding: 2vh 0;
+}
+
+.chat {
+	width: 80%;
+	margin: 2vh auto 2vh auto;
+	border: 1px solid black;
+}
+
+.chat-header {
+	display: flex;
+	align-items: center;
+	padding: 0 0.5vw;
+	border-width: 0 0 2px 0;
+	border-style: solid;
+	border-color: gray;
+}
+
+.chat-header img {
+	width: 3vw;
+}
+
+.dm-img {
+	border-radius: 100px;
+	height: 3vw;
+	object-fit: cover;
+}
+
+h2 {
+	padding: 0 0.5vw;
+}
+
+.message:not(:last-child) {
+	border-width: 0 0 0.5px 0;
+	border-style: solid;
+	border-color: gray;
+}
+
+.message {
+	padding: 1vh 0.5vw;
+}
+
+.message-metadata {
+	display: flex;
+	justify-content: space-between;
+}
+
+.author-info {
+	display: flex;
+}
+
+.author-info img {
+	width: 3vw;
+	height: 3vw;
+	object-fit: cover;
+	border-radius: 100px;
+}
+
+h3 {
+	padding: 0 0.5vw;
+}
+
+.timestamp {
+	font-weight: bold;
+}
+
+.message p {
+	margin: 0.5vh 0 0 0;
+}
+
+.groupme-event {
+	display: flex;
+	justify-content: space-between;
+	background: lightgray;
+	padding: 1vh 0.5vw;
+	font-style: italic;
+}
