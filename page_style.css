@@ -123,3 +123,7 @@ h3 {
 	padding: 1vh 0.5vw;
 	font-style: italic;
 }
+
+.italic {
+    font-style: italic;
+}

@@ -3,13 +3,14 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 12/20/2024
+@updated 1/8/2025
 
 @author  Preston Buterbaugh
 """
 # Imports
 from argparse import ArgumentParser
 import os
+import shutil
 import sys
 from typing import List
 
@@ -23,7 +24,7 @@ MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', '
 group_avatars = {}
 
 
-def main(token: str, chat_name: str | None, start: str | None, end: str | None, keyword: str | None, before: int, after: int, output_directory: str | None) -> int:
+def main(token: str, chat_name: str | None, start: str | None, end: str | None, keyword: str | None, before: int, after: int, output_directory: str | None, timeout: int = 1) -> int:
     """
     @brief  Main entrypoint of the function
     @param  token            (str): The users access token for the GroupMe API
@@ -37,6 +38,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     @param  before           (int): The number of messages to fetch immediately proceeding each message matching search criteria
     @param  after            (int): The number of messages to fetch immediately after each message matching search criteria
     @param  output_directory (str): The directory to which to write output files. If None, the current directory is used
+    @param  timeout          (int): The timeout parameter for GroupMe API calls. Defaults to 1
     @return (int)
         - 0 if completed with no errors
         - 1 otherwise
@@ -58,9 +60,9 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
         except GroupMeException:
             print(f'{user.name} has no chat called "{chat_name}"')
             return 1
-        messages = chat.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, verbose=True)
+        messages = chat.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, timeout=timeout, verbose=True)
     else:
-        messages = user.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, verbose=True)
+        messages = user.get_messages(sent_before=end, sent_after=start, keyword=keyword, before=before, after=after, timeout=timeout, verbose=True)
 
     # Check that there is at least one message
     if len(messages) == 0:
@@ -75,6 +77,8 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     style_file = open('page_style.css')
     page_style = style_file.readlines()
     style_file.close()
+
+    no_profile_location = os.path.abspath('no-profile-pic.png')
 
     # Change directory
     if output_directory is not None:
@@ -152,13 +156,31 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     chat_div = Node('div', attributes={'class': 'chat'})
 
     # Create chat header
-    chat_header = create_chat_header(user, messages[0])
+    chat_header = create_chat_header(user, messages[0], timeout)
     chat_div.append_child(chat_header)
 
     # Create message container
     message_container = Node('div', attributes={'class': 'messages'})
-    
+
+    # Create variable to track if the "no-profile-pic" resource is needed in the current directory
+    no_profile_pic = False
+
+    # Create variables to track author information about deleted messages
+    deleter_name = None
+    deleter_profile_pic = None
+
     for message in messages:
+        # If text is "This message has been deleted.", it is not actually processed, but author info is recorded
+        if message.text == 'This message has been deleted' or message.text == 'This message was deleted':
+            if message.author != 'GroupMe':
+                deleter_name = message.author
+                if message.author_profile_picture_url:
+                    deleter_profile_pic = message.author_profile_picture_url
+                else:
+                    deleter_profile_pic = 'no-profile-pic.png'
+                    no_profile_pic = True
+            continue
+
         # Check if new chat or new day
         if message.chat != curr_chat or int(message.time.split(' ')[0].split('/')[1]) != curr_day:
             # End current chat
@@ -189,6 +211,11 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                     if int(message.time.split(' ')[0].split('/')[0]) != curr_month:
                         # End current month segment list
                         month_list.append_child(month_segment_list)
+
+                        # Add no-profile-pic to month directory if necessary
+                        if no_profile_pic:
+                            shutil.copy(no_profile_location, f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/no-profile-pic.png')
+                            no_profile_pic = False
 
                         # Check if new year
                         if int(message.time.split(' ')[0].split('/')[2]) != curr_year:
@@ -246,41 +273,84 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
 
             # Create new chat
             chat_div = Node('div', attributes={'class': 'chat'})
-            chat_header = create_chat_header(user, message)
+            chat_header = create_chat_header(user, message, timeout)
             chat_div.append_child(chat_header)
             message_container = Node('div', attributes={'class': 'messages'})
 
         # Process message
-        message_node = Node('div', attributes={'class': 'message'})
-        metadata = Node('div', attributes={'class': 'message-metadata'})
-
-        # Create author info
-        author_info = Node('div', attributes={'class': 'author-info'})
-        if message.author_profile_picture_url:
-            author_profile = Node('img', attributes={'src': message.author_profile_picture_url})
+        author_deleted = message.text == 'A message was deleted.' and deleter_name is not None and deleter_profile_pic is not None
+        if message.text is not None and (message.text.startswith(f'{message.author} created event') or (message.author == 'GroupMe' and not author_deleted)):
+            message_node = Node('div', attributes={'class': 'groupme-event'})
+            if message.author == 'GroupMe':
+                event_text = Node('div')
+                if message.text == 'A message was deleted.':
+                    event_text.content = 'This message has been deleted'
+                else:
+                    event_text.content = message.text
+            else:
+                event_components = message.text.split("' https:")
+                event_text = Node('div')
+                event_creation_text = Node('span', content=f"{event_components[0]}' ")
+                event_url = f'https:{event_components[1]}'
+                event_link = Node('a', attributes={'href': event_url}, content=event_url)
+                event_text.append_child(event_creation_text)
+                event_text.append_child(event_link)
+            timestamp = Node('div', content=' '.join(message.time.split(' ')[1:]))
+            message_node.append_child(event_text)
+            message_node.append_child(timestamp)
         else:
-            author_profile = Node('div', attributes={'class': 'no-pic'}, content='No profile picture')
-        author_name = Node('h3', content=message.author)
-        author_info.append_child(author_profile)
-        author_info.append_child(author_name)
-        metadata.append_child(author_info)
+            message_node = Node('div', attributes={'class': 'message'})
+            metadata = Node('div', attributes={'class': 'message-metadata'})
 
-        # Create timestamp
-        timestamp = Node('div', attributes={'class': 'timestamp'}, content=''.join(message.time.split(' ')[1:]))
-        metadata.append_child(timestamp)
+            # Create author info
+            author_info = Node('div', attributes={'class': 'author-info'})
 
-        message_node.append_child(metadata)
+            # Determine author profile picture
+            author_profile = Node('img')
+            if author_deleted:
+                author_profile.src(deleter_profile_pic)
+            elif message.author_profile_picture_url:
+                author_profile.src(message.author_profile_picture_url)
+            else:
+                author_profile.src('no-profile-pic.png')
+                no_profile_pic = True
 
-        # Process message text
-        if message.text is not None:
-            message_text = filter_text(message.text)
-            message_node.append_child(Node('p', content=message_text))
+            # Determine author name
+            author_name = Node('h3')
+            if author_deleted:
+                author_name.content = deleter_name
+            else:
+                author_name.content = message.author
+            author_info.append_child(author_profile)
+            author_info.append_child(author_name)
+            metadata.append_child(author_info)
+
+            # Create timestamp
+            timestamp = Node('div', attributes={'class': 'timestamp'}, content=' '.join(message.time.split(' ')[1:]))
+            metadata.append_child(timestamp)
+
+            message_node.append_child(metadata)
+
+            # Process message text
+            if message.text is not None:
+                message_text = filter_text(message.text)
+                if author_deleted:
+                    message_node.append_child(Node('p', attributes={'class': 'italic'}, content='This message was deleted'))
+                else:
+                    if deleter_name:
+                        deleter_name = None
+                        deleter_profile_pic = None
+                    message_node.append_child(Node('p', content=message_text))
 
         message_container.append_child(message_node)
 
     print('\rMessage processing complete')
 
     # Finish appending and exporting all files
+
+    # Add no-profile-pic to month directory if necessary
+    if no_profile_pic:
+        shutil.copy(no_profile_location, f'{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/no-profile-pic.png')
 
     # Add chat onto end of day
     chat_div.append_child(message_container)
@@ -294,8 +364,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     for day, page in segment_pages:
         header = page.get_by_class_name('header')[0]
         for nav_day, _ in segment_pages:
-            tab = Node('div', attributes={'class': 'nav'},
-                       content=f'{MONTH_NAMES[curr_month - 1]} {nav_day}{day_suffix(nav_day)}')
+            tab = Node('div', attributes={'class': 'nav'}, content=f'{MONTH_NAMES[curr_month - 1]} {nav_day}{day_suffix(nav_day)}')
             if nav_day == day:
                 tab.id('selected')
             tab_link = Node('a', attributes={'href': f'{curr_month}-{str(nav_day).zfill(2)}.html'})
@@ -339,10 +408,11 @@ def new_day_page(date: str, username: str, start_date: str = '') -> Document:
     return page
 
 
-def create_chat_header(user: GroupMe, message_data: Message) -> Node:
+def create_chat_header(user: GroupMe, message_data: Message, timeout: int) -> Node:
     """
     @brief  Creates a new chat header node based on the data contained in a message sent to that chat
     @param  user         (GroupMe) The GroupMe object representing the user whose messages are being processed
+    @param  timeout      (int)     The time to wait before retrying an API call if a 429 error is received
     @param  message_data (str)     The message data being used to create the chat header
     @return (Node) The div node representing the chat header
     """
@@ -352,9 +422,9 @@ def create_chat_header(user: GroupMe, message_data: Message) -> Node:
         chat_avatar = group_avatars[message_data.chat]
     else:
         if message_data.is_group:
-            chat_data = user.get_chat(message_data.chat)
+            chat_data = user.get_chat(message_data.chat, timeout=timeout)
         else:
-            chat_data = user.get_chat(message_data.chat, is_dm=True)
+            chat_data = user.get_chat(message_data.chat, timeout=timeout, is_dm=True)
         chat_avatar = chat_data.image_url
         group_avatars[message_data.chat] = chat_avatar
 
@@ -461,6 +531,7 @@ def filter_text(text: str) -> str:
     """
     replacements = {
         '\u2014': '-',
+        '\u2018': '&lsquo;',
         '\u2019': '&rsquo;',
         '\u201c': '&ldquo;',
         '\u201d': '&rdquo;',
@@ -468,9 +539,6 @@ def filter_text(text: str) -> str:
     }
     for unicode_char in replacements.keys():
         text = text.replace(f'{unicode_char}', replacements[unicode_char])
-    # for i in range(len(text) - 1):
-    #     if text[i:i + 2] == '\\u':
-    #         print(f'Uncaught unicode character: {text[i + 2:i + 6]}')
     return text
 
 
@@ -484,5 +552,6 @@ if __name__ == '__main__':
     parser.add_argument('--before', dest='before', default=0, help='The number of messages before each matching message to retrieve')
     parser.add_argument('--after', dest='after', default=0, help='The number of messages after each matching message to retrieve')
     parser.add_argument('-o', dest='output_directory', default=None, help='The directory to which to write all output files from the query')
+    parser.add_argument('-t', dest='timeout', default=1, help='The timeout parameter for GroupMe API requests')
     args = parser.parse_args()
-    sys.exit(main(args.token, args.group, args.start, args.end, args.keyword, args.before, args.after, args.output_directory))
+    sys.exit(main(args.token, args.group, args.start, args.end, args.keyword, args.before, args.after, args.output_directory, args.timeout))
