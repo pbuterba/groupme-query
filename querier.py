@@ -530,7 +530,8 @@ def filter_text(text: str) -> str:
     @return (str) The text prepared for presentation in HTML
     """
     replacements = {
-        '\u2014': '-',
+        '\u2013': '&mdash;',
+        '\u2014': '&ndash;',
         '\u2018': '&lsquo;',
         '\u2019': '&rsquo;',
         '\u201c': '&ldquo;',
