@@ -32,6 +32,19 @@ body {
 	padding: 2vh 0;
 }
 
+.back-button {
+    background: white;
+    border: 1.5px solid purple;
+    margin: auto auto auto 5vw;
+    font-size: 2rem;
+}
+
+.back-button:hover {
+    cursor: pointer;
+    color: gray;
+    border-color: gray;
+}
+
 .chat {
 	width: 80%;
 	margin: 2vh auto 2vh auto;

@@ -137,7 +137,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     # Create variables for tracking day
     curr_day = int(messages[0].time.split(' ')[0].split('/')[1])
     print(f'\rProcessing {MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}, {curr_year}...', end='')
-    day_page = new_day_page(messages[0].time.split(' ')[0], user.name, start_date=messages[0].time.split(' ')[0])
+    day_page = new_day_page(messages[0].time.split(' ')[0], user.name, output_directory, start_date=messages[0].time.split(' ')[0])
 
     # Create variables for tracking month segments
     curr_month_segment = calculate_month_segment(curr_day)
@@ -266,7 +266,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                 print(f'\rProcessing {MONTH_NAMES[curr_month - 1]} {curr_day}{day_suffix(curr_day)}, {curr_year}...', end='')
 
                 # Create new day
-                day_page = new_day_page(message.time.split(' ')[0], user.name)
+                day_page = new_day_page(message.time.split(' ')[0], user.name, output_directory)
 
             # Update current chat
             curr_chat = message.chat
@@ -399,11 +399,12 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
     return 0
 
 
-def new_day_page(date: str, username: str, start_date: str = '') -> Document:
+def new_day_page(date: str, username: str, root_dir: str, start_date: str = '') -> Document:
     """
     @brief  Creates a new HTML page for a day's results
     @param  date       (str): The date for which the page is being created, formatted as MM/dd/yyyy
     @param  username   (str): The user's name
+    @param  root_dir   (str): The root directory of the output. Used for calculating where the back button should point
     @param  start_date (str): If the segment is partial, and should start on a non-standard date, this specifies what
                               date it should start on. If unspecified, starts at normal beginning of month segment
     @return (Document) An HTML document containing the page with all boilerplate code in place
@@ -419,6 +420,10 @@ def new_day_page(date: str, username: str, start_date: str = '') -> Document:
     header.append_child(title)
     page.append_child(header)
     container = Node('div', attributes={'class': 'container'})
+    back_link = Node('a', attributes={'href': f'{root_dir}/cover.html'})
+    back_button = Node('button', attributes={'class': 'back-button'}, content='&lsaquo; Back')
+    back_link.append_child(back_button)
+    container.append_child(back_link)
     page.append_child(container)
     return page
 
