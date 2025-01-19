@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 1/8/2025
+@updated 1/18/2025
 
 @author  Preston Buterbaugh
 """
@@ -337,10 +337,25 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                 if author_deleted:
                     message_node.append_child(Node('p', attributes={'class': 'italic'}, content='This message was deleted'))
                 else:
+                    # Clear out information about deleted messages
                     if deleter_name:
                         deleter_name = None
                         deleter_profile_pic = None
+
+                    # Add message text
                     message_node.append_child(Node('p', content=message_text))
+
+            # Process images
+            if len(message.image_urls) > 0:
+                image_container = Node('div', attributes={'class': 'image-container'})
+                for src_url in message.image_urls:
+                    img_node = Node('img', attributes={'class': 'message-image', 'src': src_url})
+                    if len(message.image_urls) == 1:
+                        img_node.add_class('message-image-single')
+                    else:
+                        img_node.add_class('message-image-multi')
+                    image_container.append_child(img_node)
+                message_node.append_child(image_container)
 
         message_container.append_child(message_node)
 

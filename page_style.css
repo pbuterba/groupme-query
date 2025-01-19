@@ -127,3 +127,23 @@ h3 {
 .italic {
     font-style: italic;
 }
+
+.image-container {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.message-image {
+    max-height: 60vh;
+}
+
+.message-image-single {
+    max-width: 95%;
+}
+
+.message-image-multi {
+    max-width: 45%;
+}
