@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 1/18/2025
+@updated 1/20/2025
 
 @author  Preston Buterbaugh
 """
@@ -342,8 +342,59 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                         deleter_name = None
                         deleter_profile_pic = None
 
+                    # Check for links
+                    remaining_text = message_text
+                    non_link_text = []
+                    links = []
+                    while 'http:' in remaining_text or 'https:' in remaining_text:
+                        # Determine if link is http or https
+                        if remaining_text.find('http:') == -1 or -1 < remaining_text.find('https:') < remaining_text.find('http:'):
+                            link_prefix = 'https:'
+                        else:
+                            link_prefix = 'http:'
+
+                        # Get text before link
+                        non_link_text.append(remaining_text[0:remaining_text.find(link_prefix)])
+                        remaining_text = remaining_text[remaining_text.find(link_prefix):]
+
+                        # Get link text
+                        next_space = remaining_text.find(' ')
+                        next_newline = remaining_text.find('\n')
+                        if next_newline == -1:
+                            end_of_link = next_space
+                        elif next_space == -1:
+                            end_of_link = next_newline
+                        else:
+                            end_of_link = min(next_space, next_newline)
+
+                        if end_of_link == -1:
+                            links.append(remaining_text)
+                            remaining_text = ''
+                        else:
+                            links.append(remaining_text[0:end_of_link])
+                            remaining_text = remaining_text[end_of_link:]
+
+                    non_link_text.append(remaining_text)
+
                     # Add message text
-                    message_node.append_child(Node('p', content=message_text))
+                    message_paragraph = Node('p')
+                    if len(links) == 0:
+                        message_paragraph.text_content(message_text)
+                    else:
+                        # Add section before first link
+                        if len(non_link_text[0]) > 0:
+                            message_paragraph.append_child(Node('span', content=non_link_text[0]))
+
+                        # Add each link
+                        for i in range(len(links)):
+                            if links[i].endswith('.mp4') or links[i].endswith('.mov'):
+                                message_paragraph.append_child(Node('iframe', attributes={'src': links[i]}))
+                            else:
+                                message_paragraph.append_child(Node('a', attributes={'href': links[i]}, content=links[i]))
+                            if len(non_link_text[i + 1]) > 0:
+                                message_paragraph.append_child(Node('span', content=non_link_text[i + 1]))
+
+                    message_node.append_child(message_paragraph)
 
             # Process images
             if len(message.image_urls) > 0:
