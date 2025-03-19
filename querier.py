@@ -14,7 +14,7 @@ import shutil
 import sys
 from typing import List
 
-from groupme import GroupMe, Message, GroupMeException
+from pygroupmeapi import GroupMe, Message, GroupMeException
 from htmlwriter import Document, Node
 
 # List of month names
