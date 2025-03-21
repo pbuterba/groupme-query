@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 1/20/2025
+@updated 3/20/2025
 
 @author  Preston Buterbaugh
 """
@@ -15,10 +15,14 @@ import sys
 from typing import List
 
 from pygroupmeapi import GroupMe, Message, GroupMeException
+
 from htmlwriter import Document, Node
 
 # List of month names
 MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+# Character limit to display for replies
+REPLY_CHAR_LIMIT = 500
 
 # Create dictionary to cache group avatars
 group_avatars = {}
@@ -299,7 +303,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
             message_node.append_child(event_text)
             message_node.append_child(timestamp)
         else:
-            message_node = Node('div', attributes={'class': 'message'})
+            message_node = Node('div', attributes={'id': f'message-{message.id}', 'class': 'message'})
             metadata = Node('div', attributes={'class': 'message-metadata'})
 
             # Create author info
@@ -330,6 +334,26 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
             metadata.append_child(timestamp)
 
             message_node.append_child(metadata)
+
+            # Process reply information
+            if message.reply_message_id is not None:
+                reply_link = Node('a', attributes={'class': 'reply-link'})
+                reply_link.href(f'{os.getcwd()}/{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(curr_day).zfill(2)}.html#message-{message.reply_message_id}')
+                replied_message_container = Node('div', attributes={'class': 'replied-message'})
+                replied_message = message.replied_message()
+                replied_message_author = Node('h4', content=replied_message.author)
+                replied_message_text = Node('p')
+                if replied_message.text is None:
+                    print('Stop')  # Handle pictures in replies
+                    # Handle text replacements
+                elif len(replied_message.text) > REPLY_CHAR_LIMIT:
+                    replied_message_text.text_content(replied_message.text[0:REPLY_CHAR_LIMIT])
+                else:
+                    replied_message_text.text_content(replied_message.text)
+                replied_message_container.append_child(replied_message_author)
+                replied_message_container.append_child(replied_message_text)
+                reply_link.append_child(replied_message_container)
+                message_node.append_child(reply_link)
 
             # Process message text
             if message.text is not None:
