@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 3/20/2025
+@updated 3/22/2025
 
 @author  Preston Buterbaugh
 """
@@ -342,16 +342,24 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                 replied_message_container = Node('div', attributes={'class': 'replied-message'})
                 replied_message = message.replied_message()
                 replied_message_author = Node('h4', content=replied_message.author)
-                replied_message_text = Node('p')
-                if replied_message.text is None:
-                    print('Stop')  # Handle pictures in replies
-                    # Handle text replacements
-                elif len(replied_message.text) > REPLY_CHAR_LIMIT:
-                    replied_message_text.text_content(replied_message.text[0:REPLY_CHAR_LIMIT])
-                else:
-                    replied_message_text.text_content(replied_message.text)
                 replied_message_container.append_child(replied_message_author)
-                replied_message_container.append_child(replied_message_text)
+                if len(replied_message.image_urls) > 0:
+                    image_container = Node('div', attributes={'class': 'image-container'})
+                    for src_url in replied_message.image_urls:
+                        img_node = Node('img', attributes={'class': 'message-image', 'src': src_url})
+                        if len(message.image_urls) == 1:
+                            img_node.add_class('message-image-single')
+                        else:
+                            img_node.add_class('message-image-multi')
+                        image_container.append_child(img_node)
+                    replied_message_container.append_child(image_container)
+                if replied_message.text is not None:
+                    replied_message_text = Node('p')
+                    if len(replied_message.text) > REPLY_CHAR_LIMIT:
+                        replied_message_text.text_content(filter_text(replied_message.text[0:REPLY_CHAR_LIMIT]))
+                    else:
+                        replied_message_text.text_content(filter_text(replied_message.text))
+                    replied_message_container.append_child(replied_message_text)
                 reply_link.append_child(replied_message_container)
                 message_node.append_child(reply_link)
 
