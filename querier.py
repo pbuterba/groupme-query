@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 3/22/2025
+@updated 3/23/2025
 
 @author  Preston Buterbaugh
 """
@@ -338,6 +338,7 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
             # Process reply information
             if message.reply_message_id is not None:
                 reply_link = Node('a', attributes={'class': 'reply-link'})
+                # DEBUG - Fix href
                 reply_link.href(f'{os.getcwd()}/{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(curr_day).zfill(2)}.html#message-{message.reply_message_id}')
                 replied_message_container = Node('div', attributes={'class': 'replied-message'})
                 replied_message = message.replied_message()
@@ -374,57 +375,76 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
                         deleter_name = None
                         deleter_profile_pic = None
 
-                    # Check for links
+                    # Check for links and powerup emojis that may interrupt the text
                     remaining_text = message_text
-                    non_link_text = []
-                    links = []
-                    while 'http:' in remaining_text or 'https:' in remaining_text:
-                        # Determine if link is http or https
-                        if remaining_text.find('http:') == -1 or -1 < remaining_text.find('https:') < remaining_text.find('http:'):
-                            link_prefix = 'https:'
+                    text_interrupt_indicators = ['http:', 'https:']
+                    if message.emoji_replacement_char is not None:
+                        text_interrupt_indicators.append(message.emoji_replacement_char)
+                    plain_text = []
+                    text_interrupts = []
+
+                    curr_emoji = 0
+
+                    while any_substring_in_string(text_interrupt_indicators, remaining_text):
+                        # Determine kind of interrupt
+                        interrupt_indicator, interrupt_position = get_first_substring(text_interrupt_indicators, remaining_text)
+
+                        # Get text before interrupt
+                        plain_text.append(remaining_text[0:interrupt_position])
+                        remaining_text = remaining_text[interrupt_position:]
+
+                        # Get interrupt content
+                        if interrupt_indicator == message.emoji_replacement_char:
+                            if message.emoji_urls is None:
+                                message.download_emojis()
+                            try:
+                                text_interrupts.append(('powerup', http_encode_url(message.emoji_urls[curr_emoji])))
+                                curr_emoji = curr_emoji + 1
+                            except (TypeError, IndexError):
+                                print('WARNING! Insufficient emoji mappings provided for message. Emoji renderings may be inaccurate')
+                                text_interrupts.append(('powerup', ''))
+                            remaining_text = remaining_text[1:]
                         else:
-                            link_prefix = 'http:'
+                            # Get link text
+                            next_space = remaining_text.find(' ')
+                            next_newline = remaining_text.find('\n')
+                            if next_newline == -1:
+                                end_of_link = next_space
+                            elif next_space == -1:
+                                end_of_link = next_newline
+                            else:
+                                end_of_link = min(next_space, next_newline)
 
-                        # Get text before link
-                        non_link_text.append(remaining_text[0:remaining_text.find(link_prefix)])
-                        remaining_text = remaining_text[remaining_text.find(link_prefix):]
+                            if end_of_link == -1:
+                                text_interrupts.append(('link', remaining_text))
+                                remaining_text = ''
+                            else:
+                                text_interrupts.append(('link', remaining_text[0:end_of_link]))
+                                remaining_text = remaining_text[end_of_link:]
 
-                        # Get link text
-                        next_space = remaining_text.find(' ')
-                        next_newline = remaining_text.find('\n')
-                        if next_newline == -1:
-                            end_of_link = next_space
-                        elif next_space == -1:
-                            end_of_link = next_newline
-                        else:
-                            end_of_link = min(next_space, next_newline)
-
-                        if end_of_link == -1:
-                            links.append(remaining_text)
-                            remaining_text = ''
-                        else:
-                            links.append(remaining_text[0:end_of_link])
-                            remaining_text = remaining_text[end_of_link:]
-
-                    non_link_text.append(remaining_text)
+                    plain_text.append(remaining_text)
 
                     # Add message text
                     message_paragraph = Node('p')
-                    if len(links) == 0:
+                    if len(text_interrupts) == 0:
                         message_paragraph.text_content(message_text)
                     else:
-                        # Add section before first link
-                        if len(non_link_text[0]) > 0:
-                            message_paragraph.append_child(Node('span', content=non_link_text[0]))
+                        # Add section before first interrupt
+                        if len(plain_text[0]) > 0:
+                            message_paragraph.append_child(Node('span', content=plain_text[0]))
 
-                        # Add each link
-                        for i in range(len(links)):
-                            if links[i].endswith('.mp4') or links[i].endswith('.mov'):
-                                message_paragraph.append_child(Node('iframe', attributes={'src': links[i]}))
+                        # Add each link or powerup emoji
+                        for i in range(len(text_interrupts)):
+                            interrupt_type, link = text_interrupts[i]
+                            if interrupt_type == 'powerup':
+                                message_paragraph.append_child(Node('img', attributes={'src': link, 'class': 'powerup'}))
                             else:
-                                message_paragraph.append_child(Node('a', attributes={'href': links[i]}, content=links[i]))
-                            if len(non_link_text[i + 1]) > 0:
-                                message_paragraph.append_child(Node('span', content=non_link_text[i + 1]))
+                                if link.endswith('.mp4') or link.endswith('.mov'):
+                                    message_paragraph.append_child(Node('iframe', attributes={'src': link}))
+                                else:
+                                    message_paragraph.append_child(Node('a', attributes={'href': link}, content=link))
+                            if len(plain_text[i + 1]) > 0:
+                                message_paragraph.append_child(Node('span', content=plain_text[i + 1]))
 
                     message_node.append_child(message_paragraph)
 
@@ -543,6 +563,42 @@ def create_chat_header(user: GroupMe, message_data: Message, timeout: int) -> No
     return chat_header
 
 
+def any_substring_in_string(substrings: List, search_string: str) -> bool:
+    """
+    @brief  Returns whether any one of the given substrings is contained in the search string
+    @param  substrings    (List): A list of strings
+    @param  search_string (str):  A string to search for any of the substrings
+    @return (bool)
+        - True if any one of the strings contained in substrings is a substring of search_string
+        - False otherwise
+    """
+    for substring in substrings:
+        if substring in search_string:
+            return True
+    return False
+
+
+def get_first_substring(substrings: List, search_string: str) -> (str | None, int):
+    """
+    @brief  Determines the position of the first of a list of substrings within a string, as well as which
+            substring was found
+    @param  substrings    (List): A list of strings for which to search the search string
+    @param  search_string (str):  A string to search for the specified substrings
+    @return
+        - (str) The substring that is found first in the search_string, None if no substrings are found
+        - (int) The position in search_string where the substring was found, -1 if no substrings are found
+    """
+    first_substring = None
+    position = -1
+    for substring in substrings:
+        substring_pos = search_string.find(substring)
+        if substring_pos != -1 and (position == -1 or substring_pos < position):
+            position = substring_pos
+            first_substring = substring
+
+    return first_substring, position
+
+
 def calculate_month_segment(day: int) -> int:
     """
     @brief  Gets the month segment that a day falls in
@@ -642,8 +698,22 @@ def filter_text(text: str) -> str:
         '\u2026': '...'
     }
     for unicode_char in replacements.keys():
-        text = text.replace(f'{unicode_char}', replacements[unicode_char])
+        text = text.replace(unicode_char, replacements[unicode_char])
     return text
+
+
+def http_encode_url(url: str) -> str:
+    """
+    @brief  Performs text replacements in a string to make it a legal URL
+    @param  url (str): The unencoded URL
+    @return (str) The URL with appropriate replacement characters to allow it in a web address
+    """
+    replacements = {
+        ' ': 20
+    }
+    for illegal_char in replacements.keys():
+        url = url.replace(illegal_char, f'%{replacements[illegal_char]}')
+    return url
 
 
 if __name__ == '__main__':

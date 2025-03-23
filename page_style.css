@@ -129,6 +129,11 @@ h3 {
 	margin: 0.5vh 0 0 0;
 }
 
+.powerup {
+    height: 2rem;
+    vertical-align: middle;
+}
+
 .groupme-event {
 	display: flex;
 	justify-content: space-between;
