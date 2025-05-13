@@ -3,7 +3,7 @@
 @brief   A script which allows the user to query GroupMe messages from different groups and times
 
 @date    6/1/2024
-@updated 3/23/2025
+@updated 5/13/2025
 
 @author  Preston Buterbaugh
 """
@@ -337,11 +337,17 @@ def main(token: str, chat_name: str | None, start: str | None, end: str | None, 
 
             # Process reply information
             if message.reply_message_id is not None:
-                reply_link = Node('a', attributes={'class': 'reply-link'})
-                # DEBUG - Fix href
-                reply_link.href(f'{os.getcwd()}/{curr_year}/{str(curr_month).zfill(2)}-{MONTH_NAMES[curr_month - 1]}/{curr_month}-{str(curr_day).zfill(2)}.html#message-{message.reply_message_id}')
-                replied_message_container = Node('div', attributes={'class': 'replied-message'})
                 replied_message = message.replied_message()
+                replied_message_date, _, _ = replied_message.time.split(' ')
+                replied_message_month, replied_message_day, replied_message_year = [int(number) for number in replied_message_date.split('/')]
+                reply_link = Node('a', attributes={'class': 'reply-link'})
+                replied_message_href = f'{os.getcwd()}/'  # Base directory
+                replied_message_href = f'{replied_message_href}{replied_message_year}/'  # Year directory
+                replied_message_href = f'{replied_message_href}{str(replied_message_month).zfill(2)}-{MONTH_NAMES[replied_message_month - 1]}/'  # Month directory
+                replied_message_href = f'{replied_message_href}{replied_message_month}-{str(replied_message_day).zfill(2)}.html'  # Day file
+                replied_message_href = f'{replied_message_href}#message-{message.reply_message_id}'  # Message id
+                reply_link.href(replied_message_href)
+                replied_message_container = Node('div', attributes={'class': 'replied-message'})
                 replied_message_author = Node('h4', content=replied_message.author)
                 replied_message_container.append_child(replied_message_author)
                 if len(replied_message.image_urls) > 0:
